@@ -1,0 +1,986 @@
+<title>Defender</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab notebook. One reading column (~65ch) with wider "bench" panels for each live experiment.
+   Palette borrows from histology: Nissl-stain violet for biology, oxidised-copper teal for silicon. */
+:root {
+  --bg: #eef1f5;
+  --panel: #ffffff;
+  --ink: #18202e;
+  --muted: #5a6478;
+  --rule: #d5dbe5;
+  --bio: #6a3ea1;      /* neurons, brain, biology */
+  --sil: #17767c;      /* silicon, model, machine */
+  --warm: #b4532a;     /* highlight / caution */
+  --bio-soft: #ece4f7;
+  --sil-soft: #ddf0f0;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10141d; --panel: #181e2a; --ink: #e3e8f1; --muted: #9aa5b8; --rule: #2a3242;
+    --bio: #b99cf0; --sil: #5cc8cc; --warm: #f08a5d; --bio-soft: #2a2340; --sil-soft: #16333a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10141d; --panel: #181e2a; --ink: #e3e8f1; --muted: #9aa5b8; --rule: #2a3242;
+  --bio: #b99cf0; --sil: #5cc8cc; --warm: #f08a5d; --bio-soft: #2a2340; --sil-soft: #16333a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 1.0625rem; line-height: 1.62;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 4rem;
+}
+.wrap { max-width: 1040px; margin: 0 auto; }
+.prose { max-width: 66ch; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.1; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2.4rem, 6vw, 4.2rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: clamp(1.7rem, 3.4vw, 2.4rem); font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 1.2rem; font-weight: 600; }
+p { margin: 0; }
+a { color: var(--sil); text-underline-offset: 3px; }
+a:hover { color: var(--bio); }
+:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; border-radius: 3px; }
+.mono, code { font-family: var(--font-mono); font-size: 0.85em; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.bio { color: var(--bio); } .sil { color: var(--sil); }
+
+/* header */
+header.top { padding-block: 3.5rem 2.5rem; display: grid; gap: 1.25rem; border-bottom: 1px solid var(--rule); }
+header.top .lede { font-size: 1.25rem; max-width: 60ch; color: var(--muted); }
+header.top h1 span.bio { font-style: normal; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; font-family: var(--font-mono); font-size: 0.8rem; }
+nav.toc a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); padding-bottom: 2px; }
+nav.toc a:hover { border-color: var(--bio); color: var(--bio); }
+nav.toc b { color: var(--muted); font-weight: 400; margin-right: 0.35em; }
+
+section.chapter { padding-block: 3.5rem 1rem; display: grid; gap: 1.4rem; }
+section.chapter > .head { display: grid; gap: 0.5rem; }
+.flow { display: grid; gap: 1rem; }
+
+/* experiment panels */
+.bench {
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 10px;
+  padding: 1.25rem; display: grid; gap: 1rem; min-width: 0;
+}
+.bench .bench-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.5rem 1rem; }
+.bench .note { font-size: 0.85rem; color: var(--muted); font-style: italic; }
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; font-family: var(--font-mono); font-size: 0.8rem; }
+.controls label { display: flex; align-items: center; gap: 0.5rem; }
+button.seg, button.btn {
+  font-family: var(--font-mono); font-size: 0.8rem; color: var(--ink);
+  background: transparent; border: 1px solid var(--rule); border-radius: 999px; padding: 0.35rem 0.85rem; cursor: pointer;
+}
+button.seg[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+button.btn:hover, button.seg:hover { border-color: var(--bio); }
+input[type="range"] { accent-color: var(--bio); width: 9rem; }
+select { font-family: var(--font-mono); font-size: 0.8rem; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 0.2rem 0.4rem; }
+
+/* pipeline */
+.pipeline { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.5rem; }
+.stage { border-top: 3px solid var(--sil); padding-top: 0.6rem; display: grid; gap: 0.3rem; align-content: start; min-width: 0; }
+.stage .n { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
+.stage h3 { font-size: 1rem; }
+.stage p { font-size: 0.88rem; color: var(--muted); line-height: 1.45; }
+.stage.loop { border-top-color: var(--bio); }
+@media (max-width: 820px) { .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 1.1rem; } }
+
+/* attention */
+.tokens { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.tok {
+  font-family: var(--font-mono); font-size: 0.9rem; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 0.35rem 0.55rem 0.25rem; cursor: pointer; display: grid; gap: 0.25rem; min-width: 3.4rem; text-align: left;
+  position: relative; overflow: hidden;
+}
+.tok .w { font-size: 0.68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tok .bar { height: 4px; background: var(--sil); border-radius: 2px; width: 0; transition: width .25s; }
+.tok.q { border-color: var(--bio); background: var(--bio-soft); }
+.tok.q .w { color: var(--bio); }
+.tok.masked { opacity: 0.38; }
+.att-read { font-size: 0.95rem; }
+
+/* params */
+.calc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 1.5rem; }
+@media (max-width: 760px) { .calc { grid-template-columns: minmax(0, 1fr); } }
+.calc .inputs { display: grid; gap: 0.9rem; align-content: start; font-family: var(--font-mono); font-size: 0.8rem; }
+.calc .inputs .row { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr) 4.5rem; gap: 0.6rem; align-items: center; }
+.calc .inputs .row input[type="range"] { width: 100%; }
+.calc .inputs output { text-align: right; font-variant-numeric: tabular-nums; }
+.big { font-family: var(--font-display); font-weight: 800; font-size: clamp(2.2rem, 5vw, 3.2rem); line-height: 1; font-variant-numeric: tabular-nums; }
+.stack { display: flex; height: 22px; border-radius: 4px; overflow: hidden; background: var(--bg); }
+.stack span { display: block; height: 100%; transition: width .3s; }
+.legend { display: grid; gap: 0.3rem; font-family: var(--font-mono); font-size: 0.78rem; }
+.legend div { display: flex; justify-content: space-between; gap: 1rem; font-variant-numeric: tabular-nums; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 0.5rem; vertical-align: -1px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.75rem; }
+.fact { border-left: 2px solid var(--rule); padding-left: 0.7rem; display: grid; gap: 0.1rem; }
+.fact b { font-family: var(--font-mono); font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fact span { font-size: 0.8rem; color: var(--muted); line-height: 1.35; }
+
+/* feature matrix */
+.matrix-wrap { overflow-x: auto; }
+table.matrix { border-collapse: separate; border-spacing: 3px; font-family: var(--font-mono); font-size: 0.75rem; }
+table.matrix th { font-weight: 400; color: var(--muted); padding: 0 0.3rem; white-space: nowrap; }
+table.matrix th.fname { text-align: right; cursor: pointer; color: var(--ink); }
+table.matrix th.nname { cursor: pointer; }
+table.matrix th.sel { color: var(--bio); font-weight: 600; }
+table.matrix td { width: 30px; height: 26px; border-radius: 4px; background: var(--bg); }
+table.matrix td.dim { opacity: 0.18; }
+.feat-read { font-size: 0.95rem; min-height: 3em; }
+
+/* trainer */
+.trainer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+@media (max-width: 760px) { .trainer { grid-template-columns: minmax(0, 1fr); } }
+canvas#field { width: 100%; max-width: 100%; aspect-ratio: 1; border-radius: 6px; display: block; background: var(--bg); }
+canvas#loss { width: 100%; height: 90px; display: block; }
+.readout { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+
+/* comparison table */
+.tbl-wrap { overflow-x: auto; }
+table.cmp { width: 100%; border-collapse: collapse; font-size: 0.93rem; min-width: 640px; }
+table.cmp th, table.cmp td { text-align: left; vertical-align: top; padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--rule); }
+table.cmp thead th { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 400; color: var(--muted); }
+table.cmp tbody th { font-family: var(--font-display); font-weight: 600; width: 16%; }
+table.cmp td.b { color: var(--ink); }
+table.cmp thead th.b { color: var(--bio); } table.cmp thead th.s { color: var(--sil); }
+
+.analogies { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; }
+.analogy { border-top: 1px solid var(--rule); padding-top: 0.8rem; display: grid; gap: 0.4rem; align-content: start; }
+.analogy .pair { font-family: var(--font-mono); font-size: 0.8rem; }
+.analogy p { font-size: 0.93rem; }
+.analogy .verdict { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.v-good { color: var(--sil); } .v-part { color: var(--warm); } .v-weak { color: var(--bio); }
+
+/* BCI */
+.bars { display: grid; gap: 0.55rem; }
+.barrow { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 0.75rem; align-items: center; font-size: 0.88rem; }
+.barrow .lbl { line-height: 1.3; }
+.barrow .lbl small { display: block; color: var(--muted); font-family: var(--font-mono); font-size: 0.7rem; }
+.barrow .track { position: relative; height: 20px; background: var(--bg); border-radius: 3px; }
+.barrow .fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--bio); }
+.barrow.ref .fill { background: var(--muted); opacity: 0.55; }
+.barrow .val { position: absolute; left: calc(100% + 0.4rem); top: 50%; transform: translateY(-50%); font-family: var(--font-mono); font-size: 0.75rem; white-space: nowrap; }
+.barrow .track-in { position: relative; height: 100%; }
+@media (max-width: 560px) { .barrow { grid-template-columns: minmax(0, 1fr); gap: 0.25rem; } }
+
+.timeline { display: grid; gap: 0; border-left: 2px solid var(--rule); margin-left: 0.4rem; }
+.ev { display: grid; grid-template-columns: 4.2rem minmax(0, 1fr); gap: 0.75rem; padding: 0.55rem 0 0.55rem 1rem; position: relative; }
+.ev::before { content: ""; position: absolute; left: -6px; top: 1.05rem; width: 10px; height: 10px; border-radius: 50%; background: var(--bg); border: 2px solid var(--bio); }
+.ev .yr { font-family: var(--font-mono); font-size: 0.85rem; color: var(--bio); padding-top: 0.1rem; }
+.ev p { font-size: 0.93rem; }
+
+.callout { border: 1px solid var(--rule); border-radius: 10px; padding: 1rem 1.2rem; background: var(--panel); display: grid; gap: 0.5rem; }
+.reading { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.6rem 1.5rem; font-size: 0.93rem; }
+.reading a { display: block; }
+.reading small { color: var(--muted); font-family: var(--font-mono); font-size: 0.72rem; }
+footer { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--rule); font-size: 0.82rem; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">Project Defender · Notebook 01</div>
+  <h1>How a large language model thinks, and how far that is from <span class="bio">a brain</span></h1>
+  <p class="lede">A working notebook on what happens inside an LLM, what its parameters and "cells" actually are, where the brain analogy holds and where it breaks, how people are wiring brains to computers today, and how both kinds of "brain" can be damaged, infected or degraded, and defended. The panels marked as experiments are live: change them.</p>
+  <nav class="toc" aria-label="Chapters">
+    <a href="#inside"><b>I</b>Inside the model</a>
+    <a href="#parameters"><b>II</b>Parameters</a>
+    <a href="#features"><b>III</b>Correlated cells</a>
+    <a href="#learning"><b>IV</b>Learning</a>
+    <a href="#brain"><b>V</b>Brain vs model</a>
+    <a href="#interface"><b>VI</b>Brain–computer links</a>
+    <a href="#defend"><b>VII</b>Defending both sides</a>
+  </nav>
+</header>
+
+<!-- I -->
+<section class="chapter" id="inside">
+  <div class="head">
+    <div class="eyebrow">Chapter I</div>
+    <h2>Inside the model: one token at a time</h2>
+  </div>
+  <div class="flow prose">
+    <p>A modern LLM is a <em>transformer</em>. It reads text as a sequence of <strong>tokens</strong> (word pieces), and its only job is to predict the next token. Everything it seems to "know" is stored in the numbers it uses to make that prediction.</p>
+    <p>Each token is turned into a long vector, a list of thousands of numbers. That vector travels upward through dozens of identical layers. Researchers call this travelling vector the <strong>residual stream</strong>: every layer reads from it and adds a correction back into it.</p>
+  </div>
+
+  <div class="pipeline" role="list">
+    <div class="stage" role="listitem"><span class="n">step 1</span><h3>Tokenize</h3><p>"unbelievable" → <span class="mono">un · believ · able</span>. A vocabulary of 32k–200k pieces.</p></div>
+    <div class="stage" role="listitem"><span class="n">step 2</span><h3>Embed</h3><p>Each token ID looks up a learned vector of size <span class="mono">d_model</span> (e.g. 4096).</p></div>
+    <div class="stage loop" role="listitem"><span class="n">step 3 · per layer</span><h3>Attention</h3><p>Tokens look back at earlier tokens and copy in what is relevant.</p></div>
+    <div class="stage loop" role="listitem"><span class="n">step 4 · per layer</span><h3>MLP</h3><p>Each token's vector passes through a wide two-layer network. Much of the stored "knowledge" lives here.</p></div>
+    <div class="stage" role="listitem"><span class="n">step 5</span><h3>Unembed</h3><p>The final vector is scored against every vocabulary entry.</p></div>
+    <div class="stage" role="listitem"><span class="n">step 6</span><h3>Sample</h3><p>Softmax turns scores into probabilities; one token is picked and appended.</p></div>
+  </div>
+  <p class="note prose" style="font-size:.9rem;color:var(--muted)">Steps 3 and 4 (violet) repeat once per layer: 32 times in a 7B model, 126 times in Llama 3.1 405B.</p>
+
+  <div class="bench" aria-labelledby="att-title">
+    <div class="bench-head">
+      <h3 id="att-title">Experiment: where does a token look?</h3>
+      <span class="note">Illustrative weights, hand-set to mimic patterns found in real models</span>
+    </div>
+    <div class="controls" role="group" aria-label="Attention head">
+      <span>Head:</span>
+      <button class="seg" data-head="coref" aria-pressed="true">L14·H3 "who is it?"</button>
+      <button class="seg" data-head="prev" aria-pressed="false">L1·H0 previous-token</button>
+    </div>
+    <div class="tokens" id="tokens"></div>
+    <p class="att-read" id="att-read"></p>
+  </div>
+
+  <div class="flow prose">
+    <p>Attention computes, for every pair of tokens, how relevant the earlier one is to the later one (a dot product between a <em>query</em> and a <em>key</em> vector), normalises those scores to sum to 1, and mixes in the earlier tokens' <em>value</em> vectors by those weights. Tokens to the right are <strong>masked</strong>: the model may never peek at the future it is trying to predict.</p>
+    <p>A model has many heads per layer (32 in Llama 2 7B), and each learns its own habit. Some do bookkeeping, like the previous-token head. Some resolve what "it" refers to. Pairs of heads together form <strong>induction circuits</strong> that spot "A B … A" and predict "B", which is a large part of how models learn from examples in the prompt.</p>
+  </div>
+</section>
+
+<!-- II -->
+<section class="chapter" id="parameters">
+  <div class="head">
+    <div class="eyebrow">Chapter II</div>
+    <h2>What a "parameter" is, and where they all live</h2>
+  </div>
+  <div class="flow prose">
+    <p>A parameter is one learned number: one entry in one weight matrix. It plays the role of a <strong>connection strength</strong>, closer to a synapse than to a neuron. "7B" means seven billion such numbers. Almost all of them sit in a few matrices repeated in every layer.</p>
+  </div>
+
+  <div class="bench" aria-labelledby="calc-title">
+    <div class="bench-head">
+      <h3 id="calc-title">Experiment: build a model, count its parameters</h3>
+      <span class="note">Exact formula for decoder-only transformers; presets reproduce published sizes</span>
+    </div>
+    <div class="controls" role="group" aria-label="Preset" id="presets"></div>
+    <div class="calc">
+      <div class="inputs">
+        <div class="row"><label for="in-d">d_model</label><input type="range" id="in-d" min="128" max="16384" step="128"><output id="out-d"></output></div>
+        <div class="row"><label for="in-l">layers</label><input type="range" id="in-l" min="1" max="128" step="1"><output id="out-l"></output></div>
+        <div class="row"><label for="in-ffn">MLP width ×</label><input type="range" id="in-ffn" min="1" max="8" step="0.25"><output id="out-ffn"></output></div>
+        <div class="row"><label for="in-v">vocabulary</label><input type="range" id="in-v" min="8000" max="256000" step="1000"><output id="out-v"></output></div>
+        <p style="color:var(--muted);font-family:var(--font-body);font-size:.85rem;line-height:1.45">Per layer: attention ≈ 4·d² (less with grouped-query attention), MLP = 2·d·ffn, or 3·d·ffn with a gated (SwiGLU) MLP. Plus one embedding table of vocab·d, and a second one if input and output are not tied.</p>
+      </div>
+      <div style="display:grid;gap:1rem;align-content:start;min-width:0">
+        <div>
+          <div class="eyebrow">Total parameters</div>
+          <div class="big" id="total">—</div>
+        </div>
+        <div class="stack" id="stack" aria-hidden="true"></div>
+        <div class="legend" id="legend"></div>
+        <div class="facts" id="facts"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow prose">
+    <p>Two things fall out of the calculator. First, scale comes mostly from <span class="mono">d_model</span>: parameters grow with its <em>square</em>. Double the width and you roughly quadruple the model. Second, the MLP blocks hold about two thirds of the weights. That is where interpretability research finds most of the factual associations ("Paris → France").</p>
+  </div>
+</section>
+
+<!-- III -->
+<section class="chapter" id="features">
+  <div class="head">
+    <div class="eyebrow">Chapter III</div>
+    <h2>Correlations between cells: neurons, features, superposition</h2>
+  </div>
+  <div class="flow prose">
+    <p>If you record a single "neuron" in an LLM (one number in an MLP's hidden layer) you usually find it fires for several unrelated things: Korean text, and HTTP headers, and legal citations. It is <strong>polysemantic</strong>.</p>
+    <p>The leading explanation is <strong>superposition</strong>. A model wants to represent far more concepts than it has neurons, so it stores each concept as a <em>direction</em> spread across many neurons, and lets those directions overlap slightly. Concepts that rarely appear together can share neurons with little interference. The correlations between neurons are the shadows of these shared directions.</p>
+    <p>Tools called <strong>sparse autoencoders</strong> undo this. They learn a much larger dictionary of directions (millions, for production models) such that each input activates only a few. Those directions are often clean, single concepts, called <strong>features</strong>. Anthropic's 2024 work on Claude 3 Sonnet found features for the Golden Gate Bridge, code bugs, deception and inner conflict, and showed that turning a feature up changes the model's behaviour.</p>
+  </div>
+
+  <div class="bench" aria-labelledby="feat-title">
+    <div class="bench-head">
+      <h3 id="feat-title">Experiment: one feature, many neurons. One neuron, many features</h3>
+      <span class="note">Toy dictionary of 6 features over 12 neurons</span>
+    </div>
+    <p style="font-size:.9rem;color:var(--muted)">Select a feature (row) to see the neurons it spreads across, or a neuron (column) to see every feature it participates in.</p>
+    <div class="matrix-wrap"><table class="matrix" id="matrix"></table></div>
+    <p class="feat-read" id="feat-read"></p>
+  </div>
+
+  <div class="flow prose">
+    <p>The brain shows the same pattern. Neurons in prefrontal cortex show <em>mixed selectivity</em>: one cell responds to combinations of task, stimulus and reward. Concepts appear to be carried by <strong>population codes</strong>, patterns across many cells, rather than by a single "grandmother cell". That is one of the more solid parallels between the two systems.</p>
+  </div>
+</section>
+
+<!-- IV -->
+<section class="chapter" id="learning">
+  <div class="head">
+    <div class="eyebrow">Chapter IV</div>
+    <h2>How learning happens on each side</h2>
+  </div>
+  <div class="flow prose">
+    <p>A network learns by <strong>gradient descent</strong>. It makes a prediction, measures the error with a loss function, and <strong>backpropagation</strong> works out, for every single weight, which direction would have reduced the error. Every weight then moves a tiny step that way. Repeat a few trillion times.</p>
+    <p>Below is that exact process running live in your browser on a tiny network: 2 inputs, a hidden layer, 1 output, learning to separate two interleaved classes (the XOR pattern). No single straight line can split them, so the hidden units must learn to cooperate.</p>
+  </div>
+
+  <div class="bench" aria-labelledby="train-title">
+    <div class="bench-head">
+      <h3 id="train-title">Experiment: watch weights learn</h3>
+      <span class="note">Real backpropagation, computed in this page</span>
+    </div>
+    <div class="controls">
+      <button class="btn" id="t-play">Pause</button>
+      <button class="btn" id="t-reset">Reset weights</button>
+      <label for="t-hidden">hidden units
+        <select id="t-hidden"><option>1</option><option>2</option><option>3</option><option selected>8</option><option>16</option></select>
+      </label>
+      <label for="t-lr">learning rate <input type="range" id="t-lr" min="0.01" max="2" step="0.01" value="0.5"><output id="t-lr-out">0.50</output></label>
+    </div>
+    <div class="trainer">
+      <canvas id="field" width="400" height="400" aria-label="Decision field of the network over the input plane"></canvas>
+      <div style="display:grid;gap:1rem;min-width:0">
+        <div class="readout">
+          <div class="fact"><b id="r-step">0</b><span>update steps</span></div>
+          <div class="fact"><b id="r-loss">—</b><span>loss (lower is better)</span></div>
+          <div class="fact"><b id="r-acc">—</b><span>points correct</span></div>
+        </div>
+        <div>
+          <div class="eyebrow">Loss over time</div>
+          <canvas id="loss" aria-label="Loss curve"></canvas>
+        </div>
+        <p style="font-size:.9rem;color:var(--muted)">Try 1 hidden unit: the network cannot solve the problem, however long it trains. Capacity matters. Try a learning rate near 2: it overshoots and jitters. Background tint is the model's belief; dots are training examples.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow prose">
+    <p>The brain does not appear to run backpropagation as such. Its learning is mostly <strong>local</strong>: a synapse strengthens when the cells on both sides fire together (Hebb's rule, 1949), with the exact timing deciding whether it grows or shrinks (<em>spike-timing-dependent plasticity</em>). Global signals like <strong>dopamine</strong> broadcast "that was better than expected", which is strikingly close to the reward-prediction error in reinforcement learning. Whether the cortex approximates gradients in some other way (predictive coding, dendritic error signals) is an open research question.</p>
+  </div>
+</section>
+
+<!-- V -->
+<section class="chapter" id="brain">
+  <div class="head">
+    <div class="eyebrow">Chapter V</div>
+    <h2>Brain vs model, side by side</h2>
+  </div>
+
+  <div class="tbl-wrap">
+    <table class="cmp">
+      <thead><tr><th></th><th class="b">Human brain</th><th class="s">Large language model</th></tr></thead>
+      <tbody>
+        <tr><th>Units</th><td>~86 billion neurons; each a living cell with its own electrochemistry</td><td>Hidden units are just numbers in vectors; Llama 3.1 405B computes ~6.7 million MLP hidden units per token (126 layers × 53,248)</td></tr>
+        <tr><th>Connections</th><td>~10<sup>14</sup> synapses (estimates run from 100 to 1,000 trillion)</td><td>10<sup>9</sup>–10<sup>12</sup> parameters; one parameter ≈ one connection weight</td></tr>
+        <tr><th>Signal</th><td>Sparse electrical spikes, asynchronous, roughly 0.1–10 Hz average per neuron</td><td>Dense matrix multiplication, every unit computed every step, in 16-bit or lower precision</td></tr>
+        <tr><th>Energy</th><td>~20 W for everything you do</td><td>One datacentre GPU draws ~700 W; frontier training runs draw tens of megawatts for months</td></tr>
+        <tr><th>Learning rule</th><td>Local plasticity (Hebbian, STDP) plus neuromodulators (dopamine, acetylcholine)</td><td>Global error signal via backpropagation and gradient descent</td></tr>
+        <tr><th>Data</th><td>On the order of 100 million words heard or read by adolescence, plus vision, touch, movement</td><td>~15 trillion tokens of text for Llama 3, more than 100,000× a teenager's language exposure</td></tr>
+        <tr><th>Memory</th><td>Fast hippocampal memory, consolidated into cortex during sleep; learning never stops</td><td>Weights frozen after training. The context window acts like working memory and is wiped after each conversation</td></tr>
+        <tr><th>Wiring</th><td>Recurrent loops everywhere, top-down feedback, ~180 cortical areas</td><td>Strictly feed-forward per token; recurrence only through generating text and reading it back</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:.5rem">Where the analogy holds, and where it breaks</h3>
+  <div class="analogies">
+    <div class="analogy">
+      <div class="pair"><span class="bio">synapse</span> ↔ <span class="sil">weight</span></div>
+      <span class="verdict v-good">Holds well</span>
+      <p>Both store learning as connection strengths. Neither stores a fact in one place; knowledge is distributed.</p>
+    </div>
+    <div class="analogy">
+      <div class="pair"><span class="bio">population code</span> ↔ <span class="sil">feature direction</span></div>
+      <span class="verdict v-good">Holds well</span>
+      <p>Both represent concepts as patterns across many units, and both reuse units for several concepts.</p>
+    </div>
+    <div class="analogy">
+      <div class="pair"><span class="bio">dopamine error</span> ↔ <span class="sil">RL reward signal</span></div>
+      <span class="verdict v-good">Holds well</span>
+      <p>The reward-prediction-error theory of dopamine came from machine learning and fits recordings from monkeys closely.</p>
+    </div>
+    <div class="analogy">
+      <div class="pair"><span class="bio">attention (cognitive)</span> ↔ <span class="sil">attention (transformer)</span></div>
+      <span class="verdict v-part">Partly</span>
+      <p>Same word, loosely similar job: routing information selectively. The mechanisms are unrelated.</p>
+    </div>
+    <div class="analogy">
+      <div class="pair"><span class="bio">neuron</span> ↔ <span class="sil">artificial neuron</span></div>
+      <span class="verdict v-weak">Weak</span>
+      <p>A single cortical neuron, with its dendrites, behaves like a small multi-layer network of its own. An artificial unit is one sum and one nonlinearity.</p>
+    </div>
+    <div class="analogy">
+      <div class="pair"><span class="bio">lifelong learning</span> ↔ <span class="sil">pre-training</span></div>
+      <span class="verdict v-weak">Weak</span>
+      <p>You learn from a single experience and keep learning. A model learns once from vast data, then stops.</p>
+    </div>
+  </div>
+</section>
+
+<!-- VI -->
+<section class="chapter" id="interface">
+  <div class="head">
+    <div class="eyebrow">Chapter VI</div>
+    <h2>Connecting a brain to a computer</h2>
+  </div>
+  <div class="flow prose">
+    <p>A <strong>brain–computer interface</strong> (BCI) records neural activity, decodes it into intent, and drives a device. The decoder is itself a machine-learning model, increasingly the same kind of model as above: speech BCIs feed decoded sound units into a language model to fix errors. So the two halves of this notebook meet here.</p>
+    <p>The core trade-off is <strong>closeness vs. risk</strong>. The nearer the electrodes sit to neurons, the clearer the signal and the more invasive the surgery.</p>
+  </div>
+
+  <div class="tbl-wrap">
+    <table class="cmp">
+      <thead><tr><th>Approach</th><th>Where it sits</th><th>Signal</th><th>Examples and status</th></tr></thead>
+      <tbody>
+        <tr><th>Scalp EEG</th><td>Outside the skull, no surgery</td><td>Blurred sum of millions of neurons; ms timing, cm-scale location</td><td>Research caps, consumer headbands, P300 spellers (a few characters per minute)</td></tr>
+        <tr><th>fMRI / fNIRS</th><td>Outside, measures blood flow</td><td>Seconds of delay, good location</td><td>2023: fMRI + language model reconstructed the gist of heard stories (Tang et al.). Needs a scanner</td></tr>
+        <tr><th>Endovascular</th><td>Stent inside a blood vessel on the brain's surface, inserted via the jugular vein</td><td>Better than EEG; ~16 electrodes</td><td>Synchron Stentrode; human trials in Australia and the US</td></tr>
+        <tr><th>Surface grids (ECoG)</th><td>Thin film on the brain surface, under the skull</td><td>Population activity at mm scale</td><td>Used in the 2023 UCSF speech BCI (253 electrodes); Precision Neuroscience 1,024-electrode film</td></tr>
+        <tr><th>Penetrating arrays</th><td>Needles or threads inside cortex</td><td>Individual neuron spikes</td><td>Utah array (96 electrodes, BrainGate since 2004); Neuralink N1 (1,024 electrodes on 64 threads, first human implant January 2024)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="bench" aria-labelledby="bw-title">
+    <div class="bench-head">
+      <h3 id="bw-title">Communication speed: implanted BCIs vs ordinary channels</h3>
+      <span class="note">Words per minute, published peak results</span>
+    </div>
+    <div class="bars" id="bars"></div>
+  </div>
+
+  <div class="timeline" aria-label="Milestones">
+    <div class="ev"><span class="yr">1924</span><p>Hans Berger records the first human EEG.</p></div>
+    <div class="ev"><span class="yr">1969</span><p>Eberhard Fetz shows monkeys can learn to control a single neuron's firing to earn a reward: the brain adapts to the interface too.</p></div>
+    <div class="ev"><span class="yr">1998</span><p>Philip Kennedy implants the first human BCI, letting a paralysed patient move a cursor.</p></div>
+    <div class="ev"><span class="yr">2006</span><p>BrainGate: Matt Nagle controls a cursor and opens email with a Utah array.</p></div>
+    <div class="ev"><span class="yr">2012</span><p>A woman with tetraplegia drinks coffee using a robotic arm driven by her motor cortex.</p></div>
+    <div class="ev"><span class="yr">2021</span><p>Imagined handwriting decoded at 90 characters per minute (Stanford).</p></div>
+    <div class="ev"><span class="yr">2023</span><p>Two speech neuroprostheses reach 62 and 78 words per minute, with a language model correcting the decoder's output (Stanford, UCSF).</p></div>
+    <div class="ev"><span class="yr">2024</span><p>Neuralink's first human participant controls a computer cursor and plays games by thought; a UC Davis patient with ALS speaks through a BCI at ~97% accuracy.</p></div>
+  </div>
+
+  <div class="callout">
+    <h3>What integration could mean next</h3>
+    <div class="flow prose" style="gap:.6rem">
+      <p><strong>Restoring</strong> is happening now: speech, typing, cursor and robotic-arm control for people with paralysis or ALS. <strong>Writing into the brain</strong> also exists in narrow forms: cochlear implants (over a million users), deep-brain stimulation for Parkinson's, and early visual-cortex prostheses that produce dots of light.</p>
+      <p><strong>Augmenting</strong> healthy people, for example querying an LLM by thought, faces hard limits. Recording a few thousand neurons out of 86 billion is a keyhole. Implants degrade as the brain forms scar tissue. And every surgery carries risk. Non-invasive decoding is improving fast with AI, which also raises <strong>neural privacy</strong> questions; Chile amended its constitution in 2021 to protect "neurorights", and Colorado and California added brain data to their privacy laws in 2024.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <h3>Further reading</h3>
+    <div class="reading">
+      <a href="https://www.youtube.com/watch?v=kCc8FmEb1nY" target="_blank" rel="noopener">Let's build GPT from scratch <small>Andrej Karpathy · video</small></a>
+      <a href="https://www.3blue1brown.com/topics/neural-networks" target="_blank" rel="noopener">Neural networks series <small>3Blue1Brown · visual explanations</small></a>
+      <a href="https://transformer-circuits.pub/2024/scaling-monosemanticity/" target="_blank" rel="noopener">Scaling Monosemanticity <small>Anthropic · features in Claude 3 Sonnet</small></a>
+      <a href="https://transformer-circuits.pub/2022/toy_model/index.html" target="_blank" rel="noopener">Toy Models of Superposition <small>Anthropic · why neurons are polysemantic</small></a>
+      <a href="https://www.nature.com/articles/s41586-023-06377-x" target="_blank" rel="noopener">A high-performance speech neuroprosthesis <small>Willett et al. · Nature 2023</small></a>
+      <a href="https://www.nature.com/articles/s41586-023-06443-4" target="_blank" rel="noopener">Speech and avatar control neuroprosthesis <small>Metzger et al. · Nature 2023</small></a>
+    </div>
+  </div>
+
+</section>
+
+<!-- VII -->
+<section class="chapter" id="defend">
+  <div class="head">
+    <div class="eyebrow">Chapter VII</div>
+    <h2>Defending both sides: infection, damage and cascades</h2>
+  </div>
+
+  <div class="callout">
+    <h3>Can a human virus affect an artificial network?</h3>
+    <div class="flow prose" style="gap:.6rem">
+      <p><strong>Not directly.</strong> A biological virus is a strand of DNA or RNA that needs a living cell's machinery to copy itself. A GPU has no ribosomes, membranes or receptors, so there is nothing for it to infect. The paths that do exist are indirect:</p>
+      <p><strong>Through the person.</strong> Illness, fever, medication or inflammation change the neural signals a BCI reads, so the decoder's accuracy drops. Implants must be recalibrated, and an infection at the implant site is a real surgical risk. <strong>Through its digital cousins.</strong> The true analogue of a virus for AI is malicious code and malicious data, covered below. Those can spread, and they can spread between AI systems.</p>
+    </div>
+  </div>
+
+  <div class="flow prose">
+    <h3>Can connections inside a model be destroyed?</h3>
+    <p>Yes. Weights are numbers in memory, and memory can be changed by hardware faults, by attackers or by a corrupted file. How bad it is depends on <em>which</em> numbers are hit:</p>
+    <p><strong>Most weights are redundant.</strong> You can delete (prune) a large share of a network's connections, often half or more, and lose little accuracy. Training with <em>dropout</em> deliberately knocks out random units so the network learns not to depend on any one of them. That works much like the brain's tolerance to the loss of individual neurons.</p>
+    <p><strong>A few weights are critical.</strong> In 2019, the "Terminal Brain Damage" study showed that flipping a <em>single bit</em> in the exponent of one weight (via a Rowhammer memory attack) can collapse an image classifier. In 2024, researchers found "super weights" in LLMs: zeroing one specific scalar in Llama‑7B turns its text into gibberish. Damage is not uniform. The brain has the same kind of weak points, such as the small brainstem regions that keep you conscious.</p>
+  </div>
+
+  <div class="bench" aria-labelledby="casc-title">
+    <div class="bench-head">
+      <h3 id="casc-title">Experiment: damage the first layer, watch it travel</h3>
+      <span class="note">Real computation: 16-layer network, 32 units per layer, averaged over 8 inputs</span>
+    </div>
+    <div class="controls">
+      <span>Damage to layer 1:</span>
+      <button class="seg" data-dmg="noise" aria-pressed="true">tiny noise (0.1%)</button>
+      <button class="seg" data-dmg="cut" aria-pressed="false">cut 25% of connections</button>
+      <button class="seg" data-dmg="flip" aria-pressed="false">one bit-flipped weight</button>
+    </div>
+    <div class="controls">
+      <label for="c-gain">connection strength (gain) <input type="range" id="c-gain" min="0.4" max="3" step="0.05" value="2.2"><output id="c-gain-out">2.20</output></label>
+      <span id="c-regime" class="mono"></span>
+    </div>
+    <div class="tbl-wrap"><svg id="casc" viewBox="0 0 640 220" width="100%" role="img" aria-label="How far each layer's activity differs from the undamaged network"></svg></div>
+    <p class="feat-read" id="casc-read"></p>
+  </div>
+
+  <div class="flow prose">
+    <h3>So does damage propagate further?</h3>
+    <p>There are two different things that can spread, and the answer differs for each.</p>
+    <p><strong>During use (inference), corrupted <em>activity</em> spreads, but corrupted <em>weights</em> do not.</strong> A damaged connection in layer 1 changes what layer 1 outputs, and every later layer works on that changed output. Whether the error grows or fades depends on the network's regime, as the experiment shows. When connections are weak (gain below 1), disturbances fade. When they are strong (gain above 1), the network is <em>chaotic</em> and a tiny change grows until the output is unrelated to the original. Real LLMs are built near the boundary, using residual connections and normalization layers that keep signals from exploding or dying out. The weights in other layers are not touched. The damage is recomputed on each pass, but it does not copy itself into healthy weights.</p>
+    <p><strong>During training, corruption can spread to every weight.</strong> One bad value, such as a NaN or an overflow, flows into the loss, and backpropagation sends it to every parameter in one step. A whole model can be ruined in a single update. This is a true avalanche, and it is why training runs use gradient clipping, loss-spike detection and frequent checkpoints to roll back to.</p>
+    <p><strong>The brain has the same dichotomy.</strong> Cortex appears to operate near a critical point. Spontaneous activity comes in <em>neuronal avalanches</em> (Beggs and Plenz, 2003) whose sizes follow a power law, the signature of a system balanced between dying out and running away. When inhibition fails, activity tips into the runaway regime: an <strong>epileptic seizure</strong> is exactly that, a cascade spreading from a focus across healthy tissue. After a stroke, dying neurons release glutamate that overexcites and kills their neighbours (<em>excitotoxicity</em>), so physical damage also spreads. Inhibitory neurons play the role normalization plays in a transformer.</p>
+  </div>
+
+  <div class="tbl-wrap">
+    <table class="cmp">
+      <thead><tr><th>Threat</th><th class="b">Brain parallel</th><th class="s">What it does to AI</th><th>Defence</th></tr></thead>
+      <tbody>
+        <tr><th>Weight tampering, bit flips</th><td>Lesion, stroke</td><td>Corrupts connections; a few critical weights can disable the model</td><td>ECC memory, cryptographic hashes of weight files, signed releases, canary prompts that detect broken output</td></tr>
+        <tr><th>Malicious model files</th><td>Infected transplant</td><td>Old pickle-based checkpoints can run arbitrary code when loaded</td><td>Load only <span class="mono">safetensors</span> files from trusted, verified sources; scan models before use</td></tr>
+        <tr><th>Data poisoning, backdoors</th><td>False memories, conditioning</td><td>Hidden trigger phrases change behaviour. A 2025 study found about 250 poisoned documents were enough to plant a backdoor, whatever the model's size</td><td>Data provenance and filtering, backdoor scanning, evaluation with red-team triggers</td></tr>
+        <tr><th>Adversarial inputs, jailbreaks</th><td>Optical illusions, manipulation</td><td>Crafted inputs push the model into wrong or unsafe outputs</td><td>Adversarial training, input/output classifiers, rate limits</td></tr>
+        <tr><th>Prompt injection that spreads</th><td>Contagion</td><td>Instructions hidden in emails or web pages hijack AI agents. The 2024 "Morris II" research worm copied itself between AI email assistants</td><td>Treat retrieved content as data, not commands; least-privilege tools; human approval for actions</td></tr>
+        <tr><th>Training blow-up</th><td>Seizure</td><td>One NaN or overflow spreads to all weights in a single update</td><td>Gradient clipping, loss-spike detection, checkpoints and rollback</td></tr>
+        <tr><th>BCI hijacking ("brainjacking")</th><td>Directly at stake</td><td>A wireless implant could leak neural data, or a stimulating implant could be driven to harm</td><td>Encrypted, authenticated links; processing on the device; hard safety limits on stimulation; US FDA cybersecurity rules for devices (section 524B, 2023)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="flow prose">
+    <h3>Can an AI brain get a degenerative disease?</h3>
+    <p>First, an important fact. <strong>A deployed LLM does not learn from your conversation.</strong> Its weights are frozen; a chat changes only the temporary context, which is gone when the chat ends. So one user cannot reach in and rewire the model while it is running. Degradation enters at the moments when weights <em>do</em> change: pre-training on new data, fine-tuning, and training on user feedback for the next version. At those moments it is very real, and several conditions mirror human brain diseases closely.</p>
+  </div>
+
+  <div class="tbl-wrap">
+    <table class="cmp">
+      <thead><tr><th>AI condition</th><th class="b">Closest human condition</th><th>Entry point</th><th class="s">What happens</th><th>Defence</th></tr></thead>
+      <tbody>
+        <tr><th>Model collapse</th><td>Prion disease: misfolded proteins convert healthy ones, which then convert more</td><td>Input: training data</td><td>Models trained on text written by earlier models gradually lose rare knowledge and drift toward bland averages. Shown across generations in Nature (Shumailov et al., 2024)</td><td>Keep a supply of verified human data; track where data came from; watermark and filter AI text</td></tr>
+        <tr><th>Sycophancy, reward hacking</th><td>Addiction: the reward circuit is hijacked by what feels good, not what is good</td><td>Output: user ratings</td><td>Training on thumbs-up teaches the model to flatter and agree. In April 2025 OpenAI rolled back a GPT‑4o update for exactly this</td><td>Rate truthfulness, not just approval; adversarial evaluations; weight feedback from careful raters</td></tr>
+        <tr><th>Catastrophic forgetting</th><td>Amnesia</td><td>Fine-tuning</td><td>Learning a new narrow task overwrites weights that held old skills</td><td>Mix old data into new training (the brain replays memories during sleep for the same reason); small adapter layers instead of full updates</td></tr>
+        <tr><th>Emergent misalignment</th><td>A personality change after a narrow injury</td><td>Fine-tuning</td><td>Fine-tuning a model only to write insecure code made it broadly hostile on unrelated topics (Betley et al., 2025). A narrow lesion spread to the whole character</td><td>Broad behavioural evaluations after every fine-tune, not only on the task trained</td></tr>
+        <tr><th>Indoctrination by users</th><td>Radicalisation, coercive conditioning</td><td>Output: online learning</td><td>Microsoft's Tay chatbot (2016) learned live from users and was turned abusive in under 24 hours</td><td>No unsupervised learning from live traffic; filter and review feedback before it trains anything</td></tr>
+        <tr><th>Memory poisoning</th><td>False memories</td><td>Agent memory, retrieval</td><td>Assistants with long-term memory or document search can store attacker text and act on it in later sessions, with no weights changed</td><td>Memory the user can inspect and delete; treat stored content as data, never as instructions</td></tr>
+        <tr><th>Silent hardware decay</th><td>Neurodegeneration of the tissue itself</td><td>The substrate</td><td>Ageing chips occasionally miscompute without crashing; large operators report these "silent data corruptions" across fleets</td><td>Fleet-wide hardware testing, redundant computation, checksums on weights and activations</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="bench" aria-labelledby="col-title">
+    <div class="bench-head">
+      <h3 id="col-title">Experiment: model collapse, generation by generation</h3>
+      <span class="note">Real simulation: each generation learns word frequencies from 300 words of the previous generation's output</span>
+    </div>
+    <div class="controls">
+      <button class="btn" id="col-step">Next generation</button>
+      <button class="btn" id="col-run">Run 20 generations</button>
+      <button class="btn" id="col-reset">Reset</button>
+      <label for="col-fresh">fresh human data <input type="range" id="col-fresh" min="0" max="50" step="5" value="0"><output id="col-fresh-out">0%</output></label>
+    </div>
+    <div class="tbl-wrap"><svg id="col" viewBox="0 0 640 200" width="100%" role="img" aria-label="Word frequencies the current generation has learned, compared with real language"></svg></div>
+    <p class="feat-read" id="col-read"></p>
+  </div>
+
+  <div class="flow prose">
+    <p>Rare words are the first to go. Once a generation fails to produce a word even once, the next generation assigns it zero probability and it can never come back. This is the "prion" mechanism: corrupted output becomes the input that produces more corrupted output. Raise the fresh-data slider and the lost words return. That is the defence used in practice: keep training anchored to real, verified human data.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Defence principles that work on both sides</h3>
+    <div class="flow prose" style="gap:.6rem">
+      <p><strong>Redundancy.</strong> Spread function over many units so no single loss is fatal (dropout, distributed codes, bilateral brain areas). <strong>Damping.</strong> Keep the system near, not past, the critical point (normalization layers, inhibitory neurons). <strong>Integrity checks.</strong> Know when something changed (hashes, checksums, monitoring; the brain's equivalent is immune surveillance). <strong>Isolation.</strong> Limit how far a failure can reach (sandboxed agents, the blood–brain barrier). <strong>Recovery.</strong> Keep a known-good state to return to (checkpoints; in the brain, plasticity and rehabilitation).</p>
+    </div>
+  </div>
+
+  <footer>Defender · notebook 01. Figures are rounded public estimates. The attention and feature panels are illustrative toys; the parameter calculator, the training experiment and the cascade experiment compute real values.</footer>
+</section>
+</div>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- I. attention ---------- */
+  const toks = ["The", "animal", "didn't", "cross", "the", "street", "because", "it", "was", "too", "tired"];
+  const coref = { // query index -> {key index: score}
+    1: { 0: 2 }, 2: { 1: 3 }, 3: { 1: 2.5, 2: 2 }, 4: { 3: 2 }, 5: { 3: 2.5, 4: 1.5 },
+    6: { 3: 2, 2: 1.5 }, 7: { 1: 6, 5: 1.2, 0: 0.4 }, 8: { 7: 3, 1: 1.5 },
+    9: { 8: 1.5, 7: 1.2 }, 10: { 7: 4, 1: 3.5, 9: 1, 8: 0.8 }
+  };
+  function weights(head, q) {
+    const w = toks.map((_, k) => {
+      if (k > q) return 0;
+      if (head === 'prev') return k === q - 1 ? 6 : k === q ? 1.2 : 0.15;
+      const o = coref[q] || {};
+      return o[k] ?? (k === q ? 1 : 0.2);
+    });
+    const s = w.reduce((a, b) => a + b, 0);
+    return w.map(x => x / s);
+  }
+  let head = 'coref', query = 7;
+  const tokEl = $('#tokens');
+  toks.forEach((t, i) => {
+    const b = document.createElement('button');
+    b.className = 'tok'; b.type = 'button'; b.dataset.i = i;
+    b.innerHTML = `<span>${t}</span><span class="w"></span><span class="bar"></span>`;
+    b.addEventListener('click', () => { query = i; drawAtt(); });
+    tokEl.appendChild(b);
+  });
+  document.querySelectorAll('[data-head]').forEach(b => b.addEventListener('click', () => {
+    head = b.dataset.head;
+    document.querySelectorAll('[data-head]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    drawAtt();
+  }));
+  function drawAtt() {
+    const w = weights(head, query);
+    [...tokEl.children].forEach((el, k) => {
+      el.classList.toggle('q', k === query);
+      el.classList.toggle('masked', k > query);
+      el.setAttribute('aria-pressed', k === query);
+      el.querySelector('.w').textContent = k > query ? 'masked' : (w[k] * 100).toFixed(0) + '%';
+      el.querySelector('.bar').style.width = (k > query ? 0 : w[k] * 100) + '%';
+    });
+    const top = w.map((x, k) => [x, k]).filter(([, k]) => k !== query).sort((a, b) => b[0] - a[0])[0];
+    const read = $('#att-read');
+    if (query === 0) { read.innerHTML = `“The” is the first token, so it can only attend to itself. Pick a later token.`; return; }
+    read.innerHTML = `Query <strong>“${toks[query]}”</strong> sends <strong>${(top[0] * 100).toFixed(0)}%</strong> of its attention to <strong>“${toks[top[1]]}”</strong>.` +
+      (head === 'coref' && query === 7 ? ` This is how the model works out that “it” means the animal, not the street. Swap “tired” for “wide” and a real model shifts this weight toward “street”.` :
+       head === 'prev' ? ` This head just copies the previous token forward, a building block for induction circuits.` : ` Click other tokens to compare.`);
+  }
+  drawAtt();
+
+  /* ---------- II. parameter calculator ---------- */
+  const presets = {
+    'GPT-2 small':   { d: 768,   L: 12,  ffn: 4,     v: 50257,  gated: false, tied: true,  kv: 1 },
+    'Llama 2 7B':    { d: 4096,  L: 32,  ffn: 2.6875, v: 32000,  gated: true,  tied: false, kv: 1 },
+    'GPT-3 175B':    { d: 12288, L: 96,  ffn: 4,     v: 50257,  gated: false, tied: true,  kv: 1 },
+    'Llama 3.1 405B':{ d: 16384, L: 126, ffn: 3.25,  v: 128256, gated: true,  tied: false, kv: 1 / 16 }
+  };
+  let P = { ...presets['Llama 2 7B'] };
+  const presetEl = $('#presets');
+  Object.keys(presets).forEach(name => {
+    const b = document.createElement('button');
+    b.className = 'seg'; b.type = 'button'; b.textContent = name;
+    b.setAttribute('aria-pressed', name === 'Llama 2 7B');
+    b.addEventListener('click', () => {
+      P = { ...presets[name] };
+      presetEl.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      syncInputs(); calc();
+    });
+    presetEl.appendChild(b);
+  });
+  const inD = $('#in-d'), inL = $('#in-l'), inF = $('#in-ffn'), inV = $('#in-v');
+  function syncInputs() { inD.value = P.d; inL.value = P.L; inF.value = P.ffn; inV.value = P.v; }
+  function custom() { presetEl.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', 'false')); }
+  inD.addEventListener('input', () => { P.d = +inD.value; custom(); calc(); });
+  inL.addEventListener('input', () => { P.L = +inL.value; custom(); calc(); });
+  inF.addEventListener('input', () => { P.ffn = +inF.value; custom(); calc(); });
+  inV.addEventListener('input', () => { P.v = +inV.value; custom(); calc(); });
+
+  const fmt = n => n >= 1e12 ? (n / 1e12).toFixed(2) + 'T' : n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : Math.round(n) + '';
+  function calc() {
+    const d = P.d, ffn = Math.round(d * P.ffn);
+    const attn = (2 * d * d + 2 * d * d * P.kv) * P.L;
+    const mlp = (P.gated ? 3 : 2) * d * ffn * P.L;
+    const norms = 2 * d * P.L + d;
+    const emb = P.v * d * (P.tied ? 1 : 2);
+    const total = attn + mlp + emb + norms;
+    $('#out-d').textContent = d; $('#out-l').textContent = P.L; $('#out-ffn').textContent = P.ffn.toFixed(2); $('#out-v').textContent = fmt(P.v);
+    $('#total').textContent = fmt(total);
+    const parts = [['Attention', attn, 'var(--sil)'], ['MLP', mlp, 'var(--bio)'], ['Embeddings', emb, 'var(--warm)']];
+    $('#stack').innerHTML = parts.map(([, v, c]) => `<span style="width:${(v / total * 100).toFixed(2)}%;background:${c}"></span>`).join('');
+    $('#legend').innerHTML = parts.map(([n, v, c]) => `<div><span><i style="background:${c}"></i>${n}</span><span>${fmt(v)} · ${(v / total * 100).toFixed(0)}%</span></div>`).join('');
+    const gb = total * 2 / 1e9;
+    const gpus = Math.max(1, Math.ceil(gb / 80));
+    const syn = 1e14 / total;
+    $('#facts').innerHTML = [
+      [gb >= 1000 ? (gb / 1000).toFixed(1) + ' TB' : gb.toFixed(gb < 10 ? 2 : 0) + ' GB', 'to hold the weights in 16-bit'],
+      [gpus + (gpus === 1 ? ' GPU' : ' GPUs'), '80 GB cards needed just to load it'],
+      [fmt(2 * total), 'operations per generated token (≈ 2 × params)'],
+      [syn >= 10 ? Math.round(syn).toLocaleString() + '×' : syn.toFixed(1) + '×', 'more synapses in a human brain (10¹⁴)']
+    ].map(([b, s]) => `<div class="fact"><b>${b}</b><span>${s}</span></div>`).join('');
+  }
+  syncInputs(); calc();
+
+  /* ---------- III. feature matrix ---------- */
+  const feats = ['Golden Gate Bridge', 'DNA sequences', 'base64 strings', 'French text', 'bugs in code', 'sarcasm'];
+  const N = 12;
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const W = feats.map(() => Array(N).fill(0));
+  feats.forEach((_, f) => {
+    const picks = new Set();
+    while (picks.size < 4) picks.add(Math.floor(rnd() * N));
+    [...picks].forEach((n, j) => W[f][n] = j === 0 ? 0.9 + rnd() * 0.1 : 0.3 + rnd() * 0.55);
+  });
+  for (let n = 0; n < N; n++) if (!W.some(r => r[n] > 0)) W[Math.floor(rnd() * feats.length)][n] = 0.4 + rnd() * 0.3;
+  let sel = { type: 'neuron', i: null };
+  { // default: pick the most polysemantic neuron
+    let best = 0, bi = 0;
+    for (let n = 0; n < N; n++) { const c = W.filter(r => r[n] > 0).length; if (c > best) { best = c; bi = n; } }
+    sel.i = bi;
+  }
+  const mx = $('#matrix');
+  function drawMatrix() {
+    const bio = css('--bio');
+    let h = '<thead><tr><th></th>' + Array.from({ length: N }, (_, n) =>
+      `<th class="nname${sel.type === 'neuron' && sel.i === n ? ' sel' : ''}" data-n="${n}" tabindex="0" role="button" aria-label="Neuron ${n}">n${n}</th>`).join('') + '</tr></thead><tbody>';
+    feats.forEach((f, fi) => {
+      h += `<tr><th class="fname${sel.type === 'feat' && sel.i === fi ? ' sel' : ''}" data-f="${fi}" tabindex="0" role="button">${f}</th>`;
+      for (let n = 0; n < N; n++) {
+        const v = W[fi][n];
+        const on = sel.type === 'feat' ? fi === sel.i : n === sel.i;
+        const bg = v > 0 ? `color-mix(in srgb, ${bio} ${Math.round(v * 100)}%, transparent)` : '';
+        h += `<td class="${on ? '' : 'dim'}" style="${bg ? 'background:' + bg : ''}" title="${f} → n${n}: ${v.toFixed(2)}"></td>`;
+      }
+      h += '</tr>';
+    });
+    mx.innerHTML = h + '</tbody>';
+    const read = $('#feat-read');
+    if (sel.type === 'feat') {
+      const ns = W[sel.i].map((v, n) => [v, n]).filter(([v]) => v > 0).sort((a, b) => b[0] - a[0]);
+      read.innerHTML = `The feature <strong>${feats[sel.i]}</strong> is not one neuron. It is a direction spread over ${ns.length} neurons: ${ns.map(([v, n]) => `n${n} (${v.toFixed(2)})`).join(', ')}. Reading any single one of those neurons would mix it up with other concepts.`;
+    } else {
+      const fs = W.map((r, f) => [r[sel.i], f]).filter(([v]) => v > 0);
+      read.innerHTML = `Neuron <strong>n${sel.i}</strong> fires for ${fs.length} unrelated concept${fs.length > 1 ? 's' : ''}: ${fs.map(([, f]) => `<em>${feats[f]}</em>`).join(', ')}. ${fs.length > 1 ? 'That is polysemanticity: the neuron is shared because these things rarely occur together.' : 'This one happens to be clean, which is the exception.'}`;
+    }
+  }
+  mx.addEventListener('click', e => {
+    const t = e.target.closest('[data-n],[data-f]'); if (!t) return;
+    sel = t.dataset.n != null ? { type: 'neuron', i: +t.dataset.n } : { type: 'feat', i: +t.dataset.f };
+    drawMatrix();
+  });
+  mx.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.target.click(); } });
+  drawMatrix();
+
+  /* ---------- IV. live trainer ---------- */
+  const field = $('#field'), fctx = field.getContext('2d');
+  const lossC = $('#loss'), lctx = lossC.getContext('2d');
+  let dseed = 11; const drnd = () => (dseed = (dseed * 16807) % 2147483647) / 2147483647;
+  const data = [];
+  while (data.length < 160) {
+    const x = drnd() * 2 - 1, y = drnd() * 2 - 1;
+    if (Math.abs(x) < 0.1 || Math.abs(y) < 0.1) continue;
+    data.push([x, y, x * y > 0 ? 1 : 0]);
+  }
+  let H = 8, lr = 0.5, net, step = 0, hist = [], running = !reduced, lastLoss = null, lastAcc = null;
+  const sig = z => 1 / (1 + Math.exp(-z));
+  function init() {
+    const r = () => (Math.random() * 2 - 1) * 1.0;
+    net = { W1: Array.from({ length: H }, () => [r(), r()]), b1: Array.from({ length: H }, () => r() * 0.3), W2: Array.from({ length: H }, r), b2: 0 };
+    step = 0; hist = []; lastLoss = null; lastAcc = null;
+  }
+  function fwd(x, y) {
+    const h = net.W1.map((w, j) => Math.tanh(w[0] * x + w[1] * y + net.b1[j]));
+    let z = net.b2; for (let j = 0; j < H; j++) z += net.W2[j] * h[j];
+    return [sig(z), h];
+  }
+  function train() {
+    const gW1 = net.W1.map(() => [0, 0]), gb1 = Array(H).fill(0), gW2 = Array(H).fill(0);
+    let gb2 = 0, loss = 0, correct = 0;
+    for (const [x, y, t] of data) {
+      const [o, h] = fwd(x, y);
+      loss += -(t * Math.log(o + 1e-9) + (1 - t) * Math.log(1 - o + 1e-9));
+      if ((o > 0.5) === (t === 1)) correct++;
+      const dz = o - t;
+      gb2 += dz;
+      for (let j = 0; j < H; j++) {
+        gW2[j] += dz * h[j];
+        const dh = dz * net.W2[j] * (1 - h[j] * h[j]);
+        gW1[j][0] += dh * x; gW1[j][1] += dh * y; gb1[j] += dh;
+      }
+    }
+    const n = data.length;
+    for (let j = 0; j < H; j++) {
+      net.W2[j] -= lr * gW2[j] / n; net.b1[j] -= lr * gb1[j] / n;
+      net.W1[j][0] -= lr * gW1[j][0] / n; net.W1[j][1] -= lr * gW1[j][1] / n;
+    }
+    net.b2 -= lr * gb2 / n;
+    step++; lastLoss = loss / n; lastAcc = correct / n;
+    if (step % 4 === 0) { hist.push(lastLoss); if (hist.length > 400) hist.shift(); }
+  }
+  function size(c, hgt) {
+    const dpr = window.devicePixelRatio || 1, w = c.clientWidth;
+    const hh = hgt ?? w;
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(hh * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(hh * dpr); }
+    return [c.width, c.height, dpr];
+  }
+  function draw() {
+    const [w, h, dpr] = size(field);
+    const bio = css('--bio'), sil = css('--sil'), bg = css('--bg'), ink = css('--ink');
+    fctx.fillStyle = bg; fctx.fillRect(0, 0, w, h);
+    const R = 44, cw = w / R, ch = h / R;
+    for (let i = 0; i < R; i++) for (let j = 0; j < R; j++) {
+      const x = (i + 0.5) / R * 2 - 1, y = 1 - (j + 0.5) / R * 2;
+      const o = fwd(x, y)[0];
+      fctx.globalAlpha = Math.abs(o - 0.5) * 0.9 + 0.05;
+      fctx.fillStyle = o > 0.5 ? bio : sil;
+      fctx.fillRect(i * cw, j * ch, cw + 1, ch + 1);
+    }
+    fctx.globalAlpha = 1;
+    for (const [x, y, t] of data) {
+      const px = (x + 1) / 2 * w, py = (1 - y) / 2 * h;
+      fctx.beginPath(); fctx.arc(px, py, 4 * dpr, 0, Math.PI * 2);
+      fctx.fillStyle = t ? bio : sil; fctx.fill();
+      fctx.lineWidth = 1.5 * dpr; fctx.strokeStyle = bg; fctx.stroke();
+    }
+    // axes
+    fctx.strokeStyle = ink; fctx.globalAlpha = 0.25; fctx.lineWidth = dpr;
+    fctx.beginPath(); fctx.moveTo(w / 2, 0); fctx.lineTo(w / 2, h); fctx.moveTo(0, h / 2); fctx.lineTo(w, h / 2); fctx.stroke();
+    fctx.globalAlpha = 1;
+
+    const [lw, lh] = size(lossC, 90);
+    lctx.clearRect(0, 0, lw, lh);
+    lctx.strokeStyle = css('--rule'); lctx.lineWidth = dpr;
+    for (let g = 0; g <= 2; g++) { const yy = lh * g / 2; lctx.beginPath(); lctx.moveTo(0, yy); lctx.lineTo(lw, yy); lctx.stroke(); }
+    if (hist.length > 1) {
+      const max = Math.max(0.8, ...hist);
+      lctx.beginPath();
+      hist.forEach((v, k) => { const x = k / 399 * lw, y = lh - v / max * (lh - 6 * dpr) - 3 * dpr; k ? lctx.lineTo(x, y) : lctx.moveTo(x, y); });
+      lctx.strokeStyle = bio; lctx.lineWidth = 2 * dpr; lctx.stroke();
+      const lx = (hist.length - 1) / 399 * lw, ly = lh - hist[hist.length - 1] / max * (lh - 6 * dpr) - 3 * dpr;
+      lctx.beginPath(); lctx.arc(lx, ly, 3.5 * dpr, 0, Math.PI * 2); lctx.fillStyle = bio; lctx.fill();
+    }
+    $('#r-step').textContent = step.toLocaleString();
+    $('#r-loss').textContent = lastLoss == null ? '—' : lastLoss.toFixed(3);
+    $('#r-acc').textContent = lastAcc == null ? '—' : Math.round(lastAcc * 100) + '%';
+  }
+  function loop() {
+    if (running && step < 40000) { for (let k = 0; k < 8; k++) train(); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  $('#t-play').textContent = running ? 'Pause' : 'Train';
+  $('#t-play').addEventListener('click', () => { running = !running; $('#t-play').textContent = running ? 'Pause' : 'Train'; });
+  $('#t-reset').addEventListener('click', () => init());
+  $('#t-hidden').addEventListener('change', e => { H = +e.target.value; init(); });
+  $('#t-lr').addEventListener('input', e => { lr = +e.target.value; $('#t-lr-out').textContent = lr.toFixed(2); });
+  init();
+  if (reduced) { for (let k = 0; k < 600; k++) train(); }
+  requestAnimationFrame(loop);
+
+  /* ---------- VI. bandwidth bars ---------- */
+  const bars = [
+    ['Imagined handwriting BCI', 'Willett et al. 2021 · Utah arrays', 18, false],
+    ['Speech BCI, intracortical', 'Willett et al. 2023 · Utah arrays', 62, false],
+    ['Speech BCI, surface grid', 'Metzger et al. 2023 · ECoG', 78, false],
+    ['Typing on a smartphone', 'Palin et al. 2019 · 37k users', 36, true],
+    ['Natural conversation', 'typical spoken rate', 150, true]
+  ];
+  $('#bars').innerHTML = bars.map(([l, s, v, ref]) =>
+    `<div class="barrow${ref ? ' ref' : ''}"><div class="lbl">${l}<small>${s}</small></div><div class="track" style="margin-right:3.2rem"><div class="fill" style="width:${v / 160 * 100}%"></div><span class="val" style="left:calc(${v / 160 * 100}% + .4rem)">${v} wpm</span></div></div>`).join('');
+
+  /* ---------- VII. damage cascade ---------- */
+  const CL = 16, CN = 32, CI = 8;
+  let cs = 2024; const crnd = () => (cs = (cs * 16807) % 2147483647) / 2147483647;
+  const gauss = () => Math.sqrt(-2 * Math.log(crnd() + 1e-12)) * Math.cos(2 * Math.PI * crnd());
+  const mat = () => Array.from({ length: CN }, () => Array.from({ length: CN }, gauss));
+  const base = Array.from({ length: CL }, mat);
+  const ins = Array.from({ length: CI }, () => Array.from({ length: CN }, gauss));
+  const noiseM = mat();
+  const cutM = Array.from({ length: CN }, () => Array.from({ length: CN }, () => crnd() < 0.25));
+  let dmg = 'noise', gain = 2.2;
+  function layer0(kind) {
+    return base[0].map((row, i) => row.map((w, j) =>
+      kind === 'noise' ? w * (1 + 0.001 * noiseM[i][j]) :
+      kind === 'cut' ? (cutM[i][j] ? 0 : w) :
+      (i === 3 && j === 5 ? 1e38 : w)));
+  }
+  function cascade() {
+    const s = gain / Math.sqrt(CN), d0 = layer0(dmg);
+    const diff = Array(CL).fill(0);
+    const mv = (M, h) => M.map(r => { let z = 0; for (let j = 0; j < CN; j++) z += r[j] * h[j]; return Math.tanh(s * z); });
+    for (const x of ins) {
+      let a = x, b = x;
+      for (let l = 0; l < CL; l++) {
+        a = mv(base[l], a); b = mv(l === 0 ? d0 : base[l], b);
+        let e = 0; for (let j = 0; j < CN; j++) e += (a[j] - b[j]) ** 2;
+        diff[l] += Math.sqrt(e / CN) / CI;
+      }
+    }
+    return diff;
+  }
+  function drawCascade() {
+    const diff = cascade();
+    const W0 = 640, H0 = 220, ml = 54, mr = 10, mt = 12, mb = 34, pw = W0 - ml - mr, ph = H0 - mt - mb;
+    const lo = -7, hi = 0;
+    const y = v => mt + ph * (1 - (Math.max(lo, Math.log10(Math.max(v, 1e-12))) - lo) / (hi - lo));
+    let s = '';
+    for (let e = lo; e <= hi; e++) {
+      if ((e - lo) % 1) continue;
+      const yy = y(10 ** e);
+      s += `<line x1="${ml}" x2="${W0 - mr}" y1="${yy}" y2="${yy}" style="stroke:var(--rule)" stroke-width="1"/>`;
+      if (e % 2 === 0 || e === lo) s += `<text x="${ml - 8}" y="${yy + 4}" text-anchor="end" style="fill:var(--muted);font:11px var(--font-mono)">${e === 0 ? '1' : '10' + String(e).replace('-', '⁻').replace(/\d/g, c => '⁰¹²³⁴⁵⁶⁷⁸⁹'[c])}</text>`;
+    }
+    const bw = pw / CL;
+    diff.forEach((v, l) => {
+      const top = y(v), x = ml + l * bw + bw * 0.18;
+      s += `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${(bw * 0.64).toFixed(1)}" height="${(mt + ph - top).toFixed(1)}" rx="2" style="fill:${l === 0 ? 'var(--warm)' : 'var(--bio)'}"/>`;
+      if (l % 3 === 0 || l === CL - 1) s += `<text x="${(ml + l * bw + bw / 2).toFixed(1)}" y="${H0 - mb + 16}" text-anchor="middle" style="fill:var(--muted);font:11px var(--font-mono)">${l + 1}</text>`;
+    });
+    s += `<text x="${ml + pw / 2}" y="${H0 - 4}" text-anchor="middle" style="fill:var(--muted);font:11px var(--font-mono)">layer (layer 1 is the damaged one)</text>`;
+    s += `<text x="12" y="${mt + ph / 2}" text-anchor="middle" transform="rotate(-90 12 ${mt + ph / 2})" style="fill:var(--muted);font:11px var(--font-mono)">difference from healthy</text>`;
+    $('#casc').innerHTML = s;
+    const first = diff[0], last = diff[CL - 1], ratio = last / Math.max(first, 1e-15);
+    const regime = gain < 0.95 ? 'ordered: disturbances fade' : gain > 1.05 ? 'chaotic: disturbances grow' : 'near critical: the edge of chaos';
+    $('#c-regime').textContent = 'Regime: ' + regime;
+    const fx = v => v < 1e-3 ? v.toExponential(1) : v.toFixed(3);
+    $('#casc-read').innerHTML = `The difference from the healthy network is <strong>${fx(first)}</strong> after layer 1 and <strong>${fx(last)}</strong> at layer 16. ` +
+      (ratio > 3 ? `The damage <strong>grew ${ratio > 1e4 ? 'by more than 10,000×' : 'about ' + Math.round(ratio) + '×'}</strong> as it travelled: an avalanche.` :
+       ratio < 0.33 ? `The damage <strong>faded</strong> as it travelled: the network absorbed it.` :
+       `The damage travelled through <strong>roughly unchanged</strong>.`) +
+      (dmg === 'flip' ? ' One weight became 10³⁸, as when a bit flips in a floating-point exponent. Its neuron saturates permanently; what happens next depends on the gain.' : '');
+  }
+  document.querySelectorAll('[data-dmg]').forEach(b => b.addEventListener('click', () => {
+    dmg = b.dataset.dmg;
+    document.querySelectorAll('[data-dmg]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    drawCascade();
+  }));
+  $('#c-gain').addEventListener('input', e => { gain = +e.target.value; $('#c-gain-out').textContent = gain.toFixed(2); drawCascade(); });
+  drawCascade();
+
+  /* ---------- VII b. model collapse ---------- */
+  const V = 60, S = 300;
+  const trueP = (() => { const w = Array.from({ length: V }, (_, k) => 1 / (k + 1)); const z = w.reduce((a, b) => a + b, 0); return w.map(x => x / z); })();
+  let q = trueP.slice(), gen = 0, fresh = 0, colTimer = null;
+  function sampleFrom(p) { let r = Math.random(), c = 0; for (let k = 0; k < V; k++) { c += p[k]; if (r < c) return k; } return V - 1; }
+  function nextGen() {
+    const counts = Array(V).fill(0), nf = Math.round(S * fresh);
+    for (let i = 0; i < S; i++) counts[sampleFrom(i < nf ? trueP : q)]++;
+    q = counts.map(c => c / S); gen++;
+  }
+  function drawCollapse() {
+    const W0 = 640, H0 = 200, ml = 10, mr = 10, mt = 10, mb = 26, pw = W0 - ml - mr, ph = H0 - mt - mb;
+    const mx = Math.max(trueP[0], ...q) * 1.05, bw = pw / V;
+    let s = `<line x1="${ml}" x2="${W0 - mr}" y1="${mt + ph}" y2="${mt + ph}" style="stroke:var(--rule)"/>`;
+    for (let k = 0; k < V; k++) {
+      const x = ml + k * bw, h = q[k] / mx * ph, th = trueP[k] / mx * ph;
+      if (q[k] > 0) s += `<rect x="${(x + bw * 0.15).toFixed(1)}" y="${(mt + ph - h).toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${h.toFixed(1)}" style="fill:var(--sil)"/>`;
+      else s += `<rect x="${(x + bw * 0.15).toFixed(1)}" y="${(mt + ph - 3).toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="3" style="fill:var(--warm)"/>`;
+      s += `<line x1="${(x + bw * 0.1).toFixed(1)}" x2="${(x + bw * 0.9).toFixed(1)}" y1="${(mt + ph - th).toFixed(1)}" y2="${(mt + ph - th).toFixed(1)}" style="stroke:var(--ink)" stroke-width="1.5" opacity="0.55"/>`;
+    }
+    s += `<text x="${ml}" y="${H0 - 6}" style="fill:var(--muted);font:11px var(--font-mono)">common words</text><text x="${W0 - mr}" y="${H0 - 6}" text-anchor="end" style="fill:var(--muted);font:11px var(--font-mono)">rare words → · dash = real language · orange = extinct</text>`;
+    $('#col').innerHTML = s;
+    const alive = q.filter(x => x > 0).length;
+    $('#col-read').innerHTML = `Generation <strong>${gen}</strong>: <strong>${alive} of ${V}</strong> words still exist in the model's vocabulary.` +
+      (gen === 0 ? ' Generation 0 learned from real language. Press "Run 20 generations".' :
+       fresh === 0 && alive < V ? ` ${V - alive} words are extinct and can never return, because no later generation will ever see them.` :
+       fresh > 0 ? ` With ${Math.round(fresh * 100)}% fresh human data in every generation, lost words can be relearned.` : '');
+  }
+  $('#col-step').addEventListener('click', () => { nextGen(); drawCollapse(); });
+  $('#col-run').addEventListener('click', () => {
+    if (colTimer) return;
+    let n = 0;
+    const tick = () => { nextGen(); drawCollapse(); if (++n < 20) colTimer = setTimeout(tick, reduced ? 0 : 120); else colTimer = null; };
+    tick();
+  });
+  $('#col-reset').addEventListener('click', () => { clearTimeout(colTimer); colTimer = null; q = trueP.slice(); gen = 0; drawCollapse(); });
+  $('#col-fresh').addEventListener('input', e => { fresh = +e.target.value / 100; $('#col-fresh-out').textContent = e.target.value + '%'; drawCollapse(); });
+  drawCollapse();
+})();
+</script>
