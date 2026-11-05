@@ -6,6 +6,8 @@ It is an abstract model for defensive research. The "payload" is a flag on a doc
 
 ## Run it
 
+From the repository root or from this folder:
+
 ```bash
 cargo run --release -- run --scenario baseline
 ```

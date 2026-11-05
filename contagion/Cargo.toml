@@ -5,6 +5,3 @@ edition = "2021"
 description = "Simulates how a poisoned 'payload' spreads through AI training data, models, people and brain-computer interfaces, and which defences stop it."
 
 [dependencies]
-
-[profile.release]
-opt-level = 3

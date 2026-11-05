@@ -1,0 +1,7 @@
+[workspace]
+members = ["contagion"]
+default-members = ["contagion"]
+resolver = "2"
+
+[profile.release]
+opt-level = 3

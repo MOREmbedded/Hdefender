@@ -20,8 +20,10 @@ Open it in any browser. No build step, no server.
 
 A Rust simulator of a payload spreading through AI training data, model generations, people and brain-computer interfaces, with a sweep over defence combinations. See [contagion/README.md](contagion/README.md) for the model and findings.
 
+Run from the project root (a Cargo workspace), in any shell including Windows PowerShell:
+
 ```bash
-cd contagion && cargo run --release -- run --scenario baseline
+cargo run --release -- run --scenario baseline
 ```
 
 ## Ideas for next notebooks
