@@ -26,6 +26,14 @@ Run from the project root (a Cargo workspace), in any shell including Windows Po
 cargo run --release -- run --scenario baseline
 ```
 
+## Lab: `poisonlab/`
+
+Real small transformers (about 0.11 M parameters) trained from scratch in Rust with candle. It plants a harmless, easy-to-learn defect in training data and measures two things: how many poisoned documents a model needs to learn it, and whether the defect spreads through generations of models that learn from earlier models' output. It also tests which defences stop it. See [poisonlab/README.md](poisonlab/README.md) for results.
+
+```bash
+cargo run --release -p poisonlab -- generations --seeds 2
+```
+
 ## Ideas for next notebooks
 
 - Train a tiny transformer locally and inspect its attention heads for real.

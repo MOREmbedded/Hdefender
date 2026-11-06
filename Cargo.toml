@@ -1,5 +1,5 @@
 [workspace]
-members = ["contagion"]
+members = ["contagion", "poisonlab"]
 default-members = ["contagion"]
 resolver = "2"
 
