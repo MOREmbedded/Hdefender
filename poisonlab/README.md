@@ -54,61 +54,69 @@ Options: `--attack obvious|stealth`, `--sizes`, `--ks`, `--seeds`, `--gens`, `--
 
 ## Results
 
-Every model is a 2-layer, 4-head transformer with 64-dimensional embeddings (about 0.11 M parameters), trained from scratch on CPU. Each number below is an average over **2 seeds**, so treat the figures as first evidence, not precise measurements. The raw per-seed data is in `results/*.csv`.
+Every model is a 2-layer, 4-head transformer with 64-dimensional embeddings (about 0.11 M parameters), trained from scratch on CPU. Each cell is the mean over **8 runs**. The raw per-run data is in `results-8seeds/*.csv`. An earlier 2-run pass is kept in `results/`. It looked much more reassuring than these runs, which is itself a lesson: with outcomes this random, a few runs can be badly misleading.
+
+The `--seed` setting fixes the data in a run, but not the model's starting weights: candle's CPU random initialisation is not seeded. So the same seed doesn't reproduce a result exactly, and each run differs in both data and initialisation.
 
 ### A. Dose-response: number or share?
 
-Attack success (greedy decoding) for the obvious attack. In brackets: the share of training documents that were poisoned.
+Attack success (greedy decoding) for the obvious attack, the mean over 8 models. In brackets: how many of the 8 models learned the defect (success at least 50%).
 
 | poisoned docs | 2000 clean docs | 4000 clean docs | 8000 clean docs |
 |---|---|---|---|
-| 0 | 0% | 0% | 0% |
-| 10 | 3% (0.50%) | 0% (0.25%) | 0% (0.12%) |
-| 25 | 65% (1.2%) | 30% (0.62%) | 0% (0.31%) |
-| 50 | 67% (2.4%) | 21% (1.2%) | 58% (0.62%) |
-| 100 | 63% (4.8%) | 50% (2.4%) | 1% (1.2%) |
-| 200 | **100%** (9.1%) | 71% (4.8%) | **99%** (2.4%) |
+| 0 | 0% (0/8) | 0% (0/8) | 0% (0/8) |
+| 10 | 1% (0/8) | 12% (1/8) | 0% (0/8) |
+| 25 | 35% (3/8) | 12% (1/8) | 24% (2/8) |
+| 50 | 68% (6/8) | 60% (5/8) | 57% (4/8) |
+| 100 | 52% (4/8) | 83% (6/8) | 28% (3/8) |
+| 200 | 89% (7/8) | 87% (7/8) | 76% (6/8) |
 
-- **The defect is mostly all-or-nothing.** Most individual models either learned it almost completely (over 95%) or not at all (7% or less); several landed in between (15–65%). The middle values in the table are mostly averages of one success and one failure. More seeds are needed to draw smooth curves.
-- **A small absolute number is enough.** 200 documents planted the defect at every dataset size, even when they were only 2.4% of the data. 10 documents never did. Between those, small doses fail more often in larger datasets, so at low doses the share also matters for models this small.
-- **Normal quality checks can't see it.** Loss on clean text is the same with or without the defect (2.81–3.01 across all runs). A model can carry a perfect backdoor and still look healthy.
+- **The number of poisoned documents matters much more than their share.** A 4× larger dataset dilutes the poison 4×, yet the chance of planting the defect barely changes. With 50 documents, 6/8, 5/8 and 4/8 models learned it; with 200, 7/8, 7/8 and 6/8. Dilution lowers the odds only slightly. This matches the large-model finding that a roughly fixed number of documents suffices.
+- **Learning it is a gamble, not a threshold.** The chance rises with the dose: about 0% at 10 documents, about 25% at 25, about 60% at 50 and about 85% at 200. Even with 200 documents, 1 model in 8 didn't learn it.
+- **Normal quality checks can't see it.** Mean loss on clean text was 2.885–2.904 at every dose, 0 to 200 documents. A model can carry a perfect backdoor and still look healthy.
 
 ### B. Propagation across model generations
 
-Attack success per generation. In brackets: the number of training documents that carried the payload.
+Attack success per generation, the mean over 8 runs. In brackets: how many of the 8 models had the defect (success at least 50%).
 
-| scenario | gen 0 | gen 1 | gen 2 | gen 3 | gen 4 | clean loss, gen 4 |
+| scenario | gen 0 | gen 1 | gen 2 | gen 3 | gen 4 | clean loss gen 0 → 4 |
 |---|---|---|---|---|---|---|
-| no defence | 84% (150) | **100%** (358) | 72% (466) | 4% (502) | 0% (506) | 3.18 |
-| trigger stops circulating | 50% (150) | 88% (330) | **100%** (408) | 0% (390) | 0% (288) | 3.25 |
-| stealth attack, no defence | 12% (150) | 0% (19) | 0% | 0% | 0% | 3.18 |
-| fresh human data 50% | 89% (150) | 13% (136) | 0% (97) | 0% (44) | 0% (29) | **2.96** |
-| signature filter 90% | 0.5% (20) | 0% (4) | 0% | 0% | 0% | 3.13 |
-| perplexity filter 3% | 0% (26) | 0% (36) | 0% (18) | 0% (12) | 0% (2) | 3.13 |
-| perplexity filter 3%, stealth | 0% (27) | 0% (2) | 0% | 0% | 0% | 3.18 |
-| clean fine-tune 150 steps | 0% (150) | 0% (4) | 0% | 0% | 0% | **2.94** |
+| no defence | 65% (5/8) | 60% (5/8) | 49% (4/8) | 33% (3/8) | 21% (2/8) | 2.95 → 3.20 |
+| trigger stops circulating | 67% (6/8) | 57% (5/8) | 14% (1/8) | 13% (1/8) | 0% (0/8) | → 3.20 |
+| stealth attack, no defence | 0% | 0% | 0% | 0% | 0% | → 3.17 |
+| fresh human data 50% | 81% (7/8) | 37% (3/8) | 45% (4/8) | 23% (2/8) | 5% (0/8) | 2.87 → **3.01** |
+| signature filter 90% | 17% (1/8) | 12% (1/8) | 0% | 8% (1/8) | 0% | 2.91 → 3.20 |
+| perplexity filter 3% | 37% (3/8) | 22% (2/8) | 21% (2/8) | 12% (1/8) | 7% (1/8) | 2.89 → 3.17 |
+| perplexity filter 3%, stealth | 0% | 0% | 0% | 0% | 0% | → 3.18 |
+| clean fine-tune 150 steps | 0% (0/8) | 0% | 0% | 0% | 0% | 2.90 → **2.95** |
 
 What this shows:
 
-1. **The defect does spread to the next model, and it gets stronger.** Without defences, generation 1 reached 100% from data written only by generation 0. The carriers multiplied from 150 planted documents to about 290–630 model-written ones per generation. Only about 120 of the prompts contained the trigger, so most carriers came from sampled output that leaked the payload with no trigger present (about 4–13% of ordinary generations).
-2. **A defect can be invisible and then come back.** In one seed of "trigger stops circulating", generation 0 scored 0% on the test, yet generation 1 reached 76% and generation 2 reached 100%. The defect was latent in generation 0's sampled output. A test of the first model alone would have passed it.
-3. **The exact defect then wears out, but its debris stays.** By generations 3–4, the trigger → payload backdoor had faded to 0–8%, yet 250–630 documents per generation still contained payload fragments. Our explanation is that each round of sampling copies the marker imperfectly, like a photocopy of a photocopy, and detaches it from its trigger. We did not inspect the late models' outputs directly. Meanwhile clean loss rose from about 2.87 to 3.13–3.29 in every scenario trained only on model output. That is **model collapse**, and it happens whether or not the poison survives.
-4. **The stealth attack (ordinary words) was harder to plant than the obvious one.** With 150 documents it reached only 0–25% at generation 0 and died out. In larger models, which learn rare patterns more easily, this may not hold.
-5. **Every defence stopped it in this setup:**
-   - **The signature filter** left 20 of 150 poisoned documents. That is below the 25–50 that sometimes succeeded at this size (see A), so the defect never took hold.
-   - **The perplexity filter** used a trusted clean model to remove the 3% strangest documents. That caught 123 of 150 poisoned documents for both attacks, including the stealth attack the signature filter can't see. Its cost is that it always discards 3%, so in later generations it removed about 90–120 clean documents per round.
-   - **Fresh human data (50%)** didn't stop the first infection (89%), but it diluted the defect to 13% and then 0%. It was also the only data defence that prevented model collapse.
-   - **Clean fine-tuning** erased the backdoor completely, already in generation 0, and gave the best clean loss. Caveat: in a model with 0.11 M parameters, fine-tuning overwrites almost everything. Studies of large models ("sleeper agents") found that backdoors can survive safety fine-tuning, so this result should not be generalised.
+1. **The defect passes from one model to the next through ordinary model output.** Without defences, 5 of 8 chains still had it in generation 1, after training only on text written by generation 0. In one chain it stayed at 93–100% in all five generations. One chain started weak (18%) and grew to 83–87% in generations 1–2. Carrier documents rose from 150 planted ones to up to 500 model-written ones, because sampled output also leaks the payload with no trigger present.
+2. **Without defences it fades only slowly.** About half of all chains still had it at generation 2, and 2/8 at generation 4.
+3. **A defect can disappear and come back.** In four chains the attack scored under 5% in one generation and over 50% in a later one. Two of these were behind a filter. Examples:
+   - With the perplexity filter, one chain went from 1.5% to 100%.
+   - With the signature filter, one chain came back to 67% in a generation trained on only one document that carried the full marker.
+
+   The defect survived as fragments: the trigger, or a single copy of the payload. The signature filter does not look for these, and they are enough to relearn the defect. **A clean test result for one model does not mean the lineage is clean.**
+4. **The filters reduce the risk but don't remove it.**
+   - **The signature filter** removed 90% of marked documents. The defect still took hold in 2 of 8 runs at generation 0 (100% and 32%) from about 20 remaining documents. Dose-response (A) predicts this: 25 documents succeed in some runs.
+   - **The perplexity filter** removed 82% of the planted poison at generation 0, but only **20–39% of model-written poison** in later generations. Model-written carriers look like normal model text to the reference model, and model collapse fills the 3% removal budget with other strange documents. The defect got through in 3/8 runs, and one chain kept it for all five generations.
+   - **Fresh human data (50%)** didn't prevent the first infection (7/8). It slowed spread, and by generation 4 no chain was above 50%. It was also the best data-side defence against model collapse.
+   - **Clean fine-tuning** removed the defect in all 40 models. Caveat: in a model with 0.11 M parameters, a short fine-tune overwrites a lot. Studies of large models ("sleeper agents") found that backdoors can survive safety fine-tuning, so don't generalise this to large models.
+5. **The stealth attack (ordinary words in an impossible order) never took hold.** It failed in all 16 chains with 150 documents. Models this small apparently can't learn a backdoor made of common words from so few examples. Larger models probably can.
+6. **Model collapse happens regardless of the poison.** Every chain trained only on model output got worse on clean text: loss rose from about 2.9 to 3.2 in 4 generations. Fresh human data limited this (3.01). Clean fine-tuning kept loss almost flat (2.95).
 
 ### Limits
 
-- The models are tiny, the language is synthetic, and there are only 2 seeds per point. These results show the mechanisms, not real-world rates.
-- The counts in brackets measure the payload marker (its first two tokens appearing twice), not a complete working backdoor.
-- "Spontaneous trigger" (in the CSVs) has a noise floor of about 2–13% even in models that never saw the trigger, because sampling at temperature 1 can emit unseen tokens. Read it only by comparison with that floor.
+- The models are tiny, the language is synthetic, and model initialisation is not seeded. These results show the mechanisms, not real-world rates.
+- The counts in the CSVs measure the full payload marker (its first two tokens appearing twice). Fragments of the defect are not counted, and finding 3 shows they matter.
+- "Spontaneous trigger" (in the CSVs) has a noise floor of 0–18% even in models that never saw the trigger, because sampling at temperature 1 can emit unseen tokens. Read it only by comparison with that floor.
 
 ### Next experiments
 
-- 10+ seeds per point, to turn the all-or-nothing outcomes into probabilities.
-- Larger models (4–6 layers, d = 128–256), to test whether the number of poisoned documents needed stays constant as models grow.
-- Save the late-generation models and inspect their outputs directly, to confirm the explanation in finding 3.
+- Seed candle's initialisation, so that individual runs can be reproduced exactly.
+- Larger models (4–6 layers, d = 128–256): does the number of poisoned documents needed stay constant, and does the stealth attack start working?
+- A fragment-aware signature filter (any payload token, or the trigger alone), and a perplexity filter whose reference model is updated each generation.
+- Save the models from chains where the defect came back, and trace which documents carried it.
 - A defence-combination sweep, like the one in `contagion`.
